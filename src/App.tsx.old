@@ -1,0 +1,142 @@
+import React, { useState } from 'react';
+import { Search, ShoppingCart, Menu, Star, Heart, Upload, Loader2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+
+// Product type definition with updated fields
+interface Product {
+  id: number;
+  inv_mast_uid?: string;        // Inventory Master UID
+  item_id?: string;             // Item ID
+  Item_description?: string;    // Item Description
+  Extended_Description?: string; // Extended Description
+  Delete_Flag?: boolean;        // Delete Flag
+  discontinued?: boolean;       // Discontinued
+  Sales_Pricing_unit?: string;  // Sales Pricing Unit
+  Location_ID?: string;         // Location ID
+  Qty_On_Hand?: number;         // Quantity On Hand
+  Qty_On_Allocated?: number;    // Quantity Allocated
+  Product_Group_Description?: string; // Product Group Description
+  Cost?: number;                // Cost
+  List_Price?: number;          // List Price
+  Class_ID5?: string;           // Class ID 5
+  upc_code?: string;            // UPC Code
+  weight?: number;              // Weight
+  cube?: number;                // Cube
+  Supplier_Name?: string;       // Supplier Name
+  Image?: string;               // Image
+}
+
+function App() {
+  const [selectedCategory, setSelectedCategory] = useState("All Categories");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [error, setError] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("File upload started");
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      console.log("No file selected");
+      return;
+    }
+
+    console.log("File selected:", file.name);
+    setError("");
+    setIsLoading(true);
+    setProgress({ current: 0, total: 0 });
+
+    try {
+      if (!file.name.match(/\.(xlsx|xls)$/)) {
+        setError("Please upload an Excel file (.xlsx or .xls)");
+        setIsLoading(false);
+        console.log("Invalid file type");
+        return;
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      console.log("File loaded into buffer");
+
+      const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      console.log("Workbook read successfully");
+
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      console.log("Data converted to JSON, total rows:", jsonData.length);
+
+      const totalItems = jsonData.length;
+      setProgress({ current: 0, total: totalItems });
+
+      // Process items in chunks to show progress
+      const chunkSize = 100;
+      const newProducts: Product[] = [];
+
+      for (let i = 0; i < jsonData.length; i += chunkSize) {
+        const chunk = jsonData.slice(i, i + chunkSize);
+        console.log(`Processing chunk ${i / chunkSize + 1}`);
+
+        // Process chunk
+        const processedChunk = chunk.map((row: any, index) => ({
+          id: i + index + 1,
+          inv_mast_uid: row.inv_mast_uid,
+          item_id: row.item_id,
+          Item_description: row.Item_description,
+          Extended_Description: row.Extended_Description,
+          Delete_Flag: row.Delete_Flag === 'y',
+          discontinued: row.discontinued === 'y',
+          Sales_Pricing_unit: row.Sales_Pricing_unit,
+          Location_ID: row.Location_ID,
+          Qty_On_Hand: row.Qty_On_Hand ? parseFloat(row.Qty_On_Hand) : undefined,
+          Qty_On_Allocated: row.Qty_On_Allocated ? parseFloat(row.Qty_On_Allocated) : undefined,
+          Product_Group_Description: row.Product_Group_Description,
+          Cost: row.Cost ? parseFloat(row.Cost) : undefined,
+          List_Price: row.List_Price ? parseFloat(row.List_Price) : undefined,
+          Class_ID5: row.Class_ID5,
+          upc_code: row.upc_code,
+          weight: row.weight ? parseFloat(row.weight) : undefined,
+          cube: row.cube ? parseFloat(row.cube) : undefined,
+          Supplier_Name: row.Supplier_Name,
+          Image: row.Image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80'
+        }));
+
+        newProducts.push(...processedChunk);
+
+        // Update progress
+        setProgress(prev => {
+          const current = Math.min(i + chunkSize, totalItems);
+          console.log(`Progress: ${current}/${totalItems}`);
+          return { ...prev, current };
+        });
+
+        // Allow UI to update
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      // Filter out deleted items
+      const activeProducts = newProducts.filter(p => !p.Delete_Flag);
+      console.log("Processing complete, active products:", activeProducts.length);
+      setProducts(activeProducts);
+    } catch (err) {
+      console.error("Error processing file:", err);
+      setError("Error parsing Excel file. Please check the format.");
+    } finally {
+      setIsLoading(false);
+      setProgress({ current: 0, total: 0 });
+      console.log("File processing completed");
+    }
+  };
+
+  // Group products by their product group, handling null/undefined values
+  const categories = Array.from(new Set(products.map(p => p.Product_Group_Description || 'Uncategorized')));
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Rest of the code remains the same, focusing on rendering UI and using the updated fields */}
+    </div>
+  );
+}
+
+export default App;
